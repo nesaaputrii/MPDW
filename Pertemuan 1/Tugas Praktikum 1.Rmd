@@ -1,0 +1,1279 @@
+---
+title: "Tugas Praktikum 1 - Pengenalan Data dan Pemulusan MA, Eksponensial, dan Winter"
+author: "Nesa Saidah Meilani Putri - M0401241021"
+output:
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document: default
+---
+
+```{=html}
+<style>
+h1, h2, h3, h4, h5, h6 {
+  font-weight: bold !important;
+}
+</style>
+```
+
+# 1. Persiapan Data
+
+## Import Data
+
+```{r}
+library(readxl)
+
+data <- read_excel("Data_Wisman_Indonesia_2008_2024.xlsx")
+head(data)
+```
+
+---
+
+# 2. Eksplorasi Data
+
+```{r}
+View(data)
+str(data)
+```
+
+Diperoleh data jumlah wisatawan mancanegara ke Indonesia sebanyak **204 observasi** dengan **5 variabel**, yaitu `No`, `Tanggal`, `Tahun`, `Bulan`, dan `Jumlah_Wisman`. Data yang digunakan merupakan data bulanan yang dimulai dari **Januari 2008 hingga Desember 2024**.
+
+## Convert Data Menjadi Data Deret Waktu
+
+Selanjutnya, variabel `Jumlah_Wisman` diubah menjadi objek **time series (`ts`)** dengan `frequency = 12`, karena data memiliki frekuensi bulanan. 
+
+```{r}
+data.ts <- ts(data$Jumlah_Wisman,
+              start = c(2008, 1),
+              frequency = 12)
+
+data.ts
+```
+
+## Ringkasan Data Deret Waktu
+
+```{r}
+summary(data.ts)
+```
+
+## Plot Data Deret Waktu
+
+```{r}
+plot(data.ts,
+     main = "Jumlah Wisatawan Mancanegara Indonesia",
+     xlab = "Tahun",
+     ylab = "Jumlah Wisman")
+```
+
+**Interpretasi:**
+
+Berdasarkan plot deret waktu, jumlah wisatawan mancanegara mengalami perubahan dari waktu ke waktu. Secara umum terlihat adanya kecenderungan peningkatan jumlah wisatawan pada periode sebelum 2020, kemudian terjadi penurunan yang cukup tajam pada tahun 2020–2021. Setelah periode tersebut, jumlah wisatawan kembali meningkat hingga akhir periode pengamatan.
+
+---
+
+# 3. Pembagian Data Training dan Testing
+
+Dataset dengan jumlah observasi:
+$$ n=204 $$
+
+Pembagian dilakukan dengan proporsi 80% training:
+
+$$ n_{\text{training}}=\lfloor0.8(204)\rfloor=163 $$
+
+Sehingga:
+
+$$ n_{\text{testing}}=204-163=41 $$
+
+Jadi:
+
+- 163 observasi → data latih (training)
+- 41 observasi → data uji (testing)
+
+```{r}
+# Hitung jumlah data
+n <- nrow(data)
+
+# Tentukan batas 80%
+n_train <- floor(0.8 * n)
+
+n
+n_train
+```
+
+```{r}
+# Membagi data menjadi data training dan testing
+training <- data[1:n_train, ]
+testing <- data[(n_train + 1):n, ]
+
+# Melihat ukuran masing-masing data
+nrow(training)
+nrow(testing)
+```
+
+```{r}
+# Membuat data time series untuk training dan testing
+train.ts <- ts(training$Jumlah_Wisman,
+               start = c(2008, 1),
+               frequency = 12)
+
+test.ts <- ts(testing$Jumlah_Wisman,
+              start = c(2021, 8),
+              frequency = 12)
+
+# Melihat data training dan testing
+train.ts
+test.ts
+```
+
+```{r}
+# Menampilkan periode data training dan testing
+start(train.ts)
+end(train.ts)
+
+start(test.ts)
+end(test.ts)
+```
+
+Diperoleh:
+
+- Data Training: Januari 2008 – Juli 2021 → 163 observasi
+- Data Testing: Agustus 2021 – Desember 2024 → 41 observasi
+
+---
+
+# 4. Single Moving Average (SMA)
+
+## 4.1 Pemulusan SMA
+
+```{r}
+# Memanggil package TTR untuk fungsi SMA
+library(TTR)
+
+# Pemulusan dengan metode Single Moving Average
+# menggunakan m = 4
+data.sma <- SMA(train.ts, n = 4)
+
+# Melihat hasil pemulusan
+data.sma
+```
+
+Dari hasil yang diperoleh, beberapa nilai pada awal data berupa `NA` karena belum tersedia 4 pengamatan sebelumnya untuk menghitung nilai rata-rata. Setelah periode tersebut, nilai pemulusan dapat mengikuti pola data jumlah wisatawan mancanegara.
+
+```{r}
+# Plot data aktual dan hasil pemulusan SMA
+plot(train.ts,
+     main = "Pemulusan Single Moving Average (SMA)",
+     xlab = "Tahun",
+     ylab = "Jumlah Wisman")
+
+lines(data.sma, lwd = 2)
+```
+
+**Interpretasi:**
+
+Berdasarkan plot pemulusan SMA dengan $m=4$, garis hasil pemulusan terlihat lebih halus dibandingkan garis data aktual. Hal ini terjadi karena nilai SMA merupakan rata-rata dari 4 pengamatan sebelumnya. Garis pemulusan masih mengikuti pola umum data, tetapi perubahan yang naik atau turun secara tajam tidak langsung terlihat pada garis SMA. Pada awal periode terdapat beberapa nilai yang belum dapat dihitung karena membutuhkan 4 pengamatan sebelumnya.
+
+## 4.2 Peramalan
+
+```{r}
+# Membuat ramalan 1 periode ke depan
+data.ramal <- c(NA, data.sma)
+
+# Melihat hasil ramalan
+data.ramal
+```
+
+```{r}
+# Membuat data gabungan aktual, pemulusan, dan ramalan
+data.gab <- cbind(
+  aktual = c(train.ts, test.ts),
+  pemulusan = c(data.sma, rep(NA, length(test.ts))),
+  ramalan = c(
+    data.ramal,
+    rep(data.ramal[length(data.ramal)], length(test.ts) - 1)
+  )
+)
+
+# Melihat hasil gabungan
+data.gab
+```
+
+```{r}
+# Plot data aktual dan hasil ramalan
+plot(c(train.ts, test.ts),
+     main = "Peramalan dengan Single Moving Average (SMA)",
+     xlab = "Tahun",
+     ylab = "Jumlah Wisman")
+
+lines(data.ramal, lwd = 2)
+```
+
+**Interpretasi:**
+
+Pada grafik, nilai ramalan cenderung lebih halus dibandingkan data aktual karena menggunakan rata-rata beberapa pengamatan. Pada periode setelah data training, nilai ramalan relatif mengikuti nilai terakhir yang tersedia sehingga perubahan data yang cukup besar belum dapat diikuti dengan baik.
+
+## 4.3 Akurasi Data Training
+
+```{r}
+# Menghitung error pada data training
+error_train.sma <- train.ts - data.ramal[1:length(train.ts)]
+
+# Menghitung akurasi data training
+SSE_train.sma <- sum(error_train.sma[5:length(train.ts)]^2)
+
+MSE_train.sma <- mean(error_train.sma[5:length(train.ts)]^2)
+
+MAPE_train.sma <- mean(
+  abs(
+    (error_train.sma[5:length(train.ts)] /
+       train.ts[5:length(train.ts)]) * 100
+  )
+)
+
+# Membuat tabel akurasi
+akurasi_train.sma <- matrix(
+  c(SSE_train.sma, MSE_train.sma, MAPE_train.sma)
+)
+
+row.names(akurasi_train.sma) <- c("SSE", "MSE", "MAPE")
+colnames(akurasi_train.sma) <- c("Akurasi m = 4")
+
+akurasi_train.sma
+```
+
+Berdasarkan hasil akurasi data training, diperoleh **SSE sebesar $2.715596\times10^{12}$**, **MSE sebesar $1.707922\times10^{10}$**, dan **MAPE sebesar 15.08716%**. Nilai tersebut menunjukkan bahwa pada data training, rata-rata kesalahan persentase hasil ramalan terhadap data aktual sekitar **15%**.
+
+## 4.4 Akurasi Data Testing
+
+```{r}
+# Mengambil hasil ramalan untuk data testing
+ramalan_test.sma <- data.gab[
+  (length(train.ts) + 1):(length(train.ts) + length(test.ts)),
+  "ramalan"
+]
+
+# Menghitung error data testing
+error_test.sma <- test.ts - ramalan_test.sma
+
+# Menghitung akurasi data testing
+SSE_test.sma <- sum(error_test.sma^2)
+
+MSE_test.sma <- mean(error_test.sma^2)
+
+MAPE_test.sma <- mean(
+  abs(
+    (error_test.sma / test.ts) * 100
+  )
+)
+
+# Membuat tabel akurasi
+akurasi_test.sma <- matrix(
+  c(SSE_test.sma, MSE_test.sma, MAPE_test.sma)
+)
+
+row.names(akurasi_test.sma) <- c("SSE", "MSE", "MAPE")
+colnames(akurasi_test.sma) <- c("Akurasi m = 4")
+
+akurasi_test.sma
+```
+
+Pada data testing, diperoleh **SSE sebesar $2.422315\times10^{13}$**, **MSE sebesar $5.908085\times10^{11}$**, dan **MAPE sebesar 70.38539%**. Nilai MAPE yang cukup besar menunjukkan bahwa hasil ramalan SMA memiliki kesalahan yang lebih besar pada data testing dibandingkan data training.
+
+## 4.5 Ringkasan Akurasi SMA
+
+```{r}
+# Membuat tabel perbandingan akurasi training dan testing
+akurasi_sma <- rbind(
+  Training = c(
+    SSE = SSE_train.sma,
+    MSE = MSE_train.sma,
+    MAPE = MAPE_train.sma
+  ),
+  Testing = c(
+    SSE = SSE_test.sma,
+    MSE = MSE_test.sma,
+    MAPE = MAPE_test.sma
+  )
+)
+
+akurasi_sma
+```
+
+Secara keseluruhan, metode SMA dengan $m=4$ menghasilkan kesalahan yang lebih kecil pada data training dibandingkan data testing. Perbedaan nilai MAPE yang cukup besar, yaitu **15.08716% pada training** dan **70.38539% pada testing**, menunjukkan bahwa metode SMA belum dapat mengikuti perubahan data pada periode testing dengan baik.
+
+---
+
+# 5. Double Moving Average (DMA)
+
+## 5.1 Pemulusan Double Moving Average
+
+```{r}
+# Pemulusan pertama
+data.sma <- SMA(train.ts, n = 4)
+
+# Pemulusan kedua
+dma <- SMA(data.sma, n = 4)
+
+data.sma
+dma
+```
+
+```{r}
+# Menghitung komponen level (At)
+At <- 2 * data.sma - dma
+
+# Menghitung komponen tren (Bt)
+Bt <- 2 / (4 - 1) * (data.sma - dma)
+
+At
+Bt
+```
+
+```{r}
+# Peramalan DMA
+data.dma <- At + Bt
+
+data.dma
+```
+
+```{r}
+plot(train.ts,
+     main = "Pemulusan Double Moving Average (DMA)",
+     xlab = "Tahun",
+     ylab = "Jumlah Wisman")
+
+lines(data.sma, lwd = 2)
+lines(dma, lwd = 2)
+```
+
+**Interpretasi:**
+
+Berdasarkan hasil plot, pemulusan DMA menghasilkan garis yang lebih halus dibandingkan data aktual. Pola kenaikan dan penurunan data masih terlihat, tetapi perubahan yang terjadi secara tiba-tiba menjadi lebih halus karena proses pemulusan dilakukan sebanyak dua kali. Pada bagian awal data terdapat beberapa nilai `NA` karena belum tersedia pengamatan yang cukup untuk melakukan dua tahap pemulusan.
+
+## 5.2 Peramalan dengan DMA
+
+```{r}
+# Membuat data ramalan DMA
+data.ramal2 <- c(NA, data.dma)
+
+data.ramal2
+```
+
+```{r}
+data.gab2 <- cbind(
+  aktual = c(train.ts, test.ts),
+  pemulusan = c(data.dma, rep(NA, length(test.ts))),
+  ramalan = c(
+    data.ramal2,
+    rep(data.ramal2[length(data.ramal2)], length(test.ts) - 1)
+  )
+)
+
+data.gab2
+```
+
+```{r}
+plot(c(train.ts, test.ts),
+     main = "Peramalan dengan Double Moving Average (DMA)",
+     xlab = "Tahun",
+     ylab = "Jumlah Wisman")
+
+lines(data.ramal2, lwd = 2)
+```
+
+**Interpretasi:**
+
+Berdasarkan plot peramalan DMA, hasil ramalan cenderung lebih halus dibandingkan data aktual. Pada data training, ramalan masih mengikuti pola umum perubahan jumlah wisatawan, meskipun terdapat beberapa perbedaan dengan nilai aktual.
+
+Pada periode testing, terlihat adanya jarak yang cukup besar antara nilai aktual dan nilai ramalan. Hal ini menunjukkan bahwa ramalan DMA belum dapat mengikuti perubahan data aktual yang terjadi pada periode tersebut dengan baik.
+
+## 5.3 Akurasi Data Training
+
+```{r}
+error_train.dma <- train.ts - data.ramal2[1:length(train.ts)]
+
+SSE_train.dma <- sum(error_train.dma[8:length(train.ts)]^2)
+
+MSE_train.dma <- mean(error_train.dma[8:length(train.ts)]^2)
+
+MAPE_train.dma <- mean(
+  abs(
+    (error_train.dma[8:length(train.ts)] /
+       train.ts[8:length(train.ts)]) * 100
+  )
+)
+
+akurasi_train.dma <- matrix(
+  c(SSE_train.dma, MSE_train.dma, MAPE_train.dma)
+)
+
+row.names(akurasi_train.dma) <- c("SSE", "MSE", "MAPE")
+colnames(akurasi_train.dma) <- c("Akurasi DMA m = 4")
+
+akurasi_train.dma
+```
+
+Berdasarkan hasil akurasi data training, diperoleh **SSE sebesar $2.475110\times10^{12}$**, **MSE sebesar $1.586609\times10^{10}$**, dan **MAPE sebesar 17.31724%**.
+
+Nilai MAPE tersebut menunjukkan bahwa rata-rata kesalahan persentase hasil ramalan DMA terhadap data aktual pada data training sekitar **17.32%**.
+
+## 5.4 Akurasi Data Testing
+
+```{r}
+ramalan_test.dma <- data.gab2[
+  (length(train.ts) + 1):(length(train.ts) + length(test.ts)),
+  "ramalan"
+]
+
+error_test.dma <- test.ts - ramalan_test.dma
+
+SSE_test.dma <- sum(error_test.dma^2)
+
+MSE_test.dma <- mean(error_test.dma^2)
+
+MAPE_test.dma <- mean(
+  abs(
+    (error_test.dma / test.ts) * 100
+  )
+)
+
+akurasi_test.dma <- matrix(
+  c(SSE_test.dma, MSE_test.dma, MAPE_test.dma)
+)
+
+row.names(akurasi_test.dma) <- c("SSE", "MSE", "MAPE")
+colnames(akurasi_test.dma) <- c("Akurasi DMA m = 4")
+
+akurasi_test.dma
+```
+
+Pada data testing, diperoleh **SSE sebesar $2.379389\times10^{13}$**, **MSE sebesar $5.803388\times10^{11}$**, dan **MAPE sebesar 69.43804%**.
+
+Nilai MAPE pada data testing jauh lebih besar dibandingkan data training. Hal ini menunjukkan bahwa kesalahan hasil peramalan DMA meningkat ketika digunakan pada data yang belum digunakan dalam pembentukan model.
+
+## 5.5 Ringkasan Akurasi DMA
+
+```{r}
+akurasi_dma <- rbind(
+  Training = c(
+    SSE = SSE_train.dma,
+    MSE = MSE_train.dma,
+    MAPE = MAPE_train.dma
+  ),
+  Testing = c(
+    SSE = SSE_test.dma,
+    MSE = MSE_test.dma,
+    MAPE = MAPE_test.dma
+  )
+)
+
+akurasi_dma
+```
+
+Berdasarkan ringkasan akurasi, nilai kesalahan pada data testing lebih besar dibandingkan data training. MAPE meningkat dari **17.31724%** pada training menjadi **69.43804%** pada testing.
+
+Dengan demikian, DMA dengan $m=4$ masih menghasilkan perbedaan yang cukup besar antara hasil ramalan dan data aktual, terutama pada periode testing. Hasil ini selanjutnya dapat digunakan untuk dibandingkan dengan metode peramalan lainnya pada bagian berikutnya.
+
+---
+
+# 6. Single Exponential Smoothing (SES)
+
+## 6.1 Pemodelan SES
+
+```{r}
+library(forecast)
+
+# SES dengan alpha = 0.2
+ses.02 <- ses(train.ts, h = length(test.ts), alpha = 0.2)
+
+# SES dengan alpha = 0.7
+ses.07 <- ses(train.ts, h = length(test.ts), alpha = 0.7)
+
+# Menampilkan hasil SES
+ses.02
+ses.07
+```
+
+Berdasarkan hasil peramalan, SES dengan $\alpha=0.2$ menghasilkan nilai ramalan sebesar **157.644,9**, sedangkan SES dengan $\alpha=0.7$ menghasilkan nilai ramalan sebesar **127.586,4** untuk periode peramalan.
+
+Nilai ramalan yang konstan pada masing-masing model menunjukkan bahwa SES menghasilkan ramalan yang relatif stabil untuk periode setelah data training. Perbedaan nilai ramalan antara $\alpha=0.2$ dan $\alpha=0.7$ menunjukkan bahwa pemilihan nilai $\alpha$ memengaruhi hasil peramalan.
+
+## 6.2 Plot hasil peramalan
+
+```{r}
+# Plot SES alpha = 0.2
+plot(ses.02,
+     main = "Peramalan Single Exponential Smoothing (Alpha = 0.2)",
+     xlab = "Tahun",
+     ylab = "Jumlah Wisman")
+
+# Plot SES alpha = 0.7
+plot(ses.07,
+     main = "Peramalan Single Exponential Smoothing (Alpha = 0.7)",
+     xlab = "Tahun",
+     ylab = "Jumlah Wisman")
+```
+
+Berdasarkan plot hasil peramalan SES, hasil ramalan terlihat lebih stabil dibandingkan data aktual. Garis ramalan tidak mengikuti perubahan data aktual secara langsung, terutama ketika terjadi perubahan jumlah wisatawan yang cukup besar.
+
+## 6.3 Menentukan parameter alpha optimal
+
+```{r}
+# SES dengan parameter alpha yang dioptimalkan
+ses.opt <- ses(train.ts, h = length(test.ts))
+
+# Menampilkan hasil parameter optimal
+ses.opt
+
+# Melihat nilai alpha optimal
+ses.opt$model$par
+```
+
+Berdasarkan hasil optimasi parameter, diperoleh nilai **alpha optimal sebesar 0,9999**. Nilai tersebut sangat mendekati 1, sehingga model memberikan bobot yang sangat besar pada pengamatan terbaru dalam proses pemulusan.
+
+Pada output model juga diperoleh nilai level awal sebesar **509.985,6318**. Dengan parameter tersebut, hasil peramalan untuk periode Agustus 2021 sampai Desember 2024 memiliki nilai **127.249** untuk setiap periode.
+
+## 6.4 Peramalan dengan alpha optimal
+
+```{r}
+# Nilai ramalan dengan alpha optimal
+ses.opt$mean
+
+# Plot hasil peramalan dengan alpha optimal
+plot(ses.opt,
+     main = "Peramalan SES dengan Alpha Optimal",
+     xlab = "Tahun",
+     ylab = "Jumlah Wisman")
+```
+
+Berdasarkan hasil peramalan dengan alpha optimal, seluruh nilai ramalan dari **Agustus 2021 sampai Desember 2024 adalah 127.249**. Artinya, model SES menghasilkan nilai ramalan yang sama untuk seluruh periode testing.
+
+Pada plot, hasil ramalan tersebut terlihat relatif datar dan tidak mengikuti perubahan jumlah wisatawan pada periode testing. Oleh karena itu, model SES dengan alpha optimal belum dapat menggambarkan perubahan data aktual yang terjadi selama periode testing.
+
+## 6.5 Akurasi data training
+
+```{r}
+# Mengambil fitted value dari model SES optimal
+fitted.ses <- fitted(ses.opt)
+
+# Menghitung error pada data training
+error_train.ses <- train.ts - fitted.ses
+
+# Menghilangkan nilai NA jika ada
+error_train.ses <- na.omit(error_train.ses)
+
+# Menghitung SSE, MSE, dan MAPE
+SSE_train.ses <- sum(error_train.ses^2)
+MSE_train.ses <- mean(error_train.ses^2)
+MAPE_train.ses <- mean(abs(error_train.ses /
+                            train.ts[!is.na(fitted(ses.opt))]) * 100)
+
+# Membuat tabel akurasi training
+akurasi_train.ses <- matrix(c(SSE_train.ses,
+                              MSE_train.ses,
+                              MAPE_train.ses))
+
+row.names(akurasi_train.ses) <- c("SSE", "MSE", "MAPE")
+colnames(akurasi_train.ses) <- c("SES Alpha Optimal")
+
+akurasi_train.ses
+```
+
+Berdasarkan hasil akurasi data training, diperoleh **SSE sebesar $1.363394\times10^{12}$**, **MSE sebesar $8.364377\times10^9$**, dan **MAPE sebesar 9,739316%**.
+
+Nilai MAPE tersebut menunjukkan bahwa rata-rata kesalahan persentase hasil ramalan SES terhadap data aktual pada data training adalah sekitar **9,74%**.
+
+## 6.6 Akurasi data testing
+
+```{r}
+# Mengambil hasil ramalan untuk data testing
+ramalan_test.ses <- as.numeric(ses.opt$mean)
+
+# Menghitung error data testing
+error_test.ses <- as.numeric(test.ts) - ramalan_test.ses
+
+# Menghitung SSE, MSE, dan MAPE
+SSE_test.ses <- sum(error_test.ses^2)
+MSE_test.ses <- mean(error_test.ses^2)
+MAPE_test.ses <- mean(abs(error_test.ses /
+                           as.numeric(test.ts)) * 100)
+
+# Membuat tabel akurasi testing
+akurasi_test.ses <- matrix(c(SSE_test.ses,
+                             MSE_test.ses,
+                             MAPE_test.ses))
+
+row.names(akurasi_test.ses) <- c("SSE", "MSE", "MAPE")
+colnames(akurasi_test.ses) <- c("SES Alpha Optimal")
+
+akurasi_test.ses
+```
+
+Pada data testing, diperoleh **SSE sebesar $2.418656\times10^{13}$**, **MSE sebesar $5.899161\times10^{11}$**, dan **MAPE sebesar 70,30509%**.
+
+Nilai MAPE pada data testing jauh lebih besar dibandingkan dengan MAPE pada data training. Hal ini menunjukkan bahwa kesalahan peramalan meningkat ketika model digunakan untuk meramalkan data pada periode testing.
+
+---
+
+# 7. Double Exponential Smoothing (DES)
+
+## 7.1 Pemodelan DES
+
+```{r}
+# Alpha = 0.2 dan Beta = 0.2
+des.02 <- HoltWinters(train.ts,
+                      gamma = FALSE,
+                      beta = 0.2,
+                      alpha = 0.2)
+
+des.02
+```
+
+Pada metode **Double Exponential Smoothing (DES)** digunakan nilai awal $\alpha=0.2$ dan $\beta=0.2$. Berdasarkan hasil pemodelan, diperoleh koefisien $a=-62.755,263$ dan $b=-6.335,977$. Nilai koefisien tren $b$ yang negatif menunjukkan adanya kecenderungan penurunan pada hasil pemulusan model dengan parameter tersebut.
+
+## 7.2 Plot hasil pemulusan dan peramalan
+
+```{r}
+plot(des.02,
+     main = "Peramalan Double Exponential Smoothing (Alpha = 0.2, Beta = 0.2)",
+     xlab = "Tahun",
+     ylab = "Jumlah Wisman")
+```
+
+Berdasarkan plot pemulusan DES dengan $\alpha=0.2$ dan $\beta=0.2$, hasil pemulusan lebih halus dibandingkan data aktual. DES melakukan pemulusan pada level dan tren sehingga perubahan data tidak langsung diikuti oleh hasil pemulusan.
+
+## 7.3 Parameter Alpha dan Beta Optimal
+
+```{r}
+des.opt <- HoltWinters(train.ts,
+                       gamma = FALSE)
+
+des.opt
+
+# Menampilkan parameter optimal
+des.opt$alpha
+des.opt$beta
+```
+
+Berdasarkan hasil optimasi parameter, diperoleh **alpha optimal sebesar 1** dan **beta optimal sebesar 0,02844065**. Nilai alpha sebesar 1 menunjukkan bahwa model memberikan bobot yang sangat besar pada pengamatan terbaru dalam menentukan level. Sementara itu, nilai beta yang relatif kecil menunjukkan bahwa perubahan komponen tren diperbarui secara lebih perlahan.
+
+Pada model optimal juga diperoleh koefisien $a=127.249,00$ dan $b=-17.860,02$. Nilai $b$ yang negatif menunjukkan bahwa model memperkirakan adanya kecenderungan penurunan pada periode setelah data training.
+
+## 7.4 Peramalan dengan parameter optimal
+
+```{r}
+ramalan.des <- predict(des.opt,
+                       n.ahead = length(test.ts))
+
+ramalan.des
+
+# Plot hasil peramalan DES dengan parameter optimal
+plot(des.opt,
+     main = "Peramalan Double Exponential Smoothing dengan Parameter Optimal",
+     xlab = "Tahun",
+     ylab = "Jumlah Wisman")
+
+lines(ramalan.des,
+      col = 2)
+```
+
+Berdasarkan hasil peramalan dengan parameter optimal, nilai ramalan mulai dari sekitar **109.388,980 pada Agustus 2021**, kemudian terus menurun pada periode berikutnya. Ramalan menjadi negatif pada periode selanjutnya dan mencapai sekitar **-605.011,831 pada Desember 2024**.
+
+Hasil tersebut menunjukkan bahwa DES dengan parameter optimal menghasilkan pola ramalan yang terus menurun. Pola ini berbeda cukup jauh dengan data aktual pada periode testing yang berada pada nilai positif dan menunjukkan peningkatan setelah periode 2021.
+
+Dengan demikian, hasil peramalan DES pada bagian ini menunjukkan bahwa model belum dapat mengikuti pola perubahan jumlah wisatawan pada periode testing dengan baik.
+
+## 7.5 Akurasi Data Training
+
+```{r}
+fitted.des <- fitted(des.opt)
+
+# Mengambil nilai fitted
+fitted_train.des <- fitted.des[, "xhat"]
+
+# Menentukan data aktual dengan panjang yang sama
+actual_train.des <- tail(
+  train.ts,
+  length(fitted_train.des)
+)
+
+# Menghitung error
+error_train.des <- actual_train.des - fitted_train.des
+
+# Menghapus NA jika ada
+valid.des <- !is.na(error_train.des)
+
+error_train.des <- error_train.des[valid.des]
+actual_train.des <- actual_train.des[valid.des]
+
+# Menghitung SSE
+SSE_train.des <- sum(error_train.des^2)
+
+# Menghitung MSE
+MSE_train.des <- mean(error_train.des^2)
+
+# Menghitung MAPE
+MAPE_train.des <- mean(
+  abs(error_train.des / actual_train.des) * 100
+)
+
+# Menampilkan hasil akurasi
+akurasi_train.des <- matrix(
+  c(SSE_train.des,
+    MSE_train.des,
+    MAPE_train.des)
+)
+
+row.names(akurasi_train.des) <- c("SSE", "MSE", "MAPE")
+
+colnames(akurasi_train.des) <- c("DES Parameter Optimal")
+
+akurasi_train.des
+```
+
+Berdasarkan hasil akurasi data training, diperoleh **SSE sebesar $1,381647\times10^{12}$**, **MSE sebesar $8,581657\times10^9$**, dan **MAPE sebesar 10,25430%**.
+
+Nilai MAPE tersebut menunjukkan bahwa rata-rata kesalahan persentase hasil pemulusan dan peramalan DES terhadap data aktual pada data training adalah sekitar **10,25%**.
+
+## 7.6 Akurasi Data Testing
+
+```{r}
+ramalan_test.des <- as.numeric(ramalan.des)
+
+error_test.des <- as.numeric(test.ts) -
+  ramalan_test.des
+
+SSE_test.des <- sum(error_test.des^2)
+
+MSE_test.des <- mean(error_test.des^2)
+
+MAPE_test.des <- mean(
+  abs(
+    error_test.des /
+      as.numeric(test.ts)
+  ) * 100
+)
+
+akurasi_test.des <- matrix(
+  c(SSE_test.des,
+    MSE_test.des,
+    MAPE_test.des)
+)
+
+row.names(akurasi_test.des) <- c("SSE", "MSE", "MAPE")
+
+colnames(akurasi_test.des) <- c("DES Parameter Optimal")
+
+akurasi_test.des
+```
+
+Pada data testing, diperoleh **SSE sebesar $5,844717\times10^{13}$**, **MSE sebesar $1,425541\times10^{12}$**, dan **MAPE sebesar 118,2783%**.
+
+Nilai MAPE pada data testing jauh lebih besar dibandingkan dengan MAPE pada data training. Hal ini menunjukkan bahwa kesalahan peramalan meningkat secara cukup besar ketika model DES digunakan untuk meramalkan data yang belum digunakan dalam pembentukan model.
+
+---
+
+# 8 Holt-Winters
+
+## 8.1 Holt-Winters Aditif
+
+```{r}
+# Pemodelan Holt-Winters aditif
+winter.add <- HoltWinters(
+  train.ts,
+  seasonal = "additive"
+)
+
+winter.add
+
+
+# Menampilkan parameter optimal
+winter.add$alpha
+winter.add$beta
+winter.add$gamma
+
+
+# Melihat hasil pemulusan
+winter.add$fitted
+
+
+# Plot hasil pemulusan Holt-Winters aditif
+plot(
+  winter.add,
+  main = "Holt-Winters Aditif",
+  xlab = "Tahun",
+  ylab = "Jumlah Wisman"
+)
+```
+
+Pada metode **Holt-Winters aditif**, diperoleh parameter optimal yaitu $\alpha=1$, $\beta=0$, dan $\gamma=0$. Nilai $\alpha=1$ menunjukkan bahwa model memberikan bobot yang sangat besar pada pengamatan terbaru dalam menentukan level. Sementara itu, nilai $\beta=0$ dan $\gamma=0$ menunjukkan bahwa pada hasil optimasi ini komponen tren dan musiman tidak diperbarui melalui parameter pemulusan.
+
+## 8.2 Peramalan Holt-Winters Aditif
+
+```{r}
+# Melakukan peramalan untuk seluruh periode testing
+ramalan.add <- predict(
+  winter.add,
+  n.ahead = length(test.ts)
+)
+
+ramalan.add
+
+
+# Plot peramalan Holt-Winters aditif
+plot(
+  train.ts,
+  xlim = c(2008, 2025),
+  main = "Peramalan Holt-Winters Aditif",
+  xlab = "Tahun",
+  ylab = "Jumlah Wisman"
+)
+
+lines(
+  fitted(winter.add)[, "xhat"],
+  col = 2
+)
+
+lines(
+  ramalan.add,
+  col = 4
+)
+
+legend(
+  "topleft",
+  legend = c("Aktual", "Fitted", "Ramalan"),
+  col = c(1, 2, 4),
+  lty = 1
+)
+```
+
+Berdasarkan hasil peramalan, Holt-Winters aditif menghasilkan pola ramalan yang berbeda pada setiap bulan dan menunjukkan pola musiman. Namun, nilai ramalan yang dihasilkan relatif rendah dibandingkan dengan nilai aktual pada periode testing.
+
+Sebagai contoh, hasil ramalan untuk **Agustus 2021 sebesar 160.330,582**, sedangkan pada periode berikutnya nilai ramalan masih berada pada kisaran yang relatif rendah. Hal ini menunjukkan bahwa model Holt-Winters aditif belum dapat mengikuti peningkatan jumlah wisatawan pada periode testing dengan baik.
+
+## 8.3 Akurasi Training Holt-Winters Aditif
+
+```{r}
+# Mengambil nilai fitted
+fitted.add <- fitted(winter.add)[, "xhat"]
+
+# Menyesuaikan data aktual dengan panjang fitted
+actual_train.add <- tail(
+  train.ts,
+  length(fitted.add)
+)
+
+# Menghitung error
+error_train.add <- actual_train.add - fitted.add
+
+# Menghitung SSE, MSE, dan MAPE
+SSE_train.add <- sum(error_train.add^2)
+
+MSE_train.add <- mean(error_train.add^2)
+
+MAPE_train.add <- mean(
+  abs(error_train.add / actual_train.add) * 100
+)
+
+# Menampilkan hasil akurasi
+akurasi_train.add <- matrix(
+  c(
+    SSE_train.add,
+    MSE_train.add,
+    MAPE_train.add
+  )
+)
+
+row.names(akurasi_train.add) <- c(
+  "SSE",
+  "MSE",
+  "MAPE"
+)
+
+colnames(akurasi_train.add) <- c(
+  "Holt-Winters Aditif"
+)
+
+akurasi_train.add
+```
+
+Berdasarkan hasil akurasi data training, diperoleh **SSE sebesar $1,123292\times10^{12}$**, **MSE sebesar $7,439023\times10^9$**, dan **MAPE sebesar 10,20307%**.
+
+Nilai MAPE tersebut menunjukkan bahwa rata-rata kesalahan persentase hasil pemulusan Holt-Winters aditif terhadap data aktual pada data training adalah sekitar **10,20%**.
+
+## 8.4 Akurasi Testing Holt-Winters Aditif
+
+```{r}
+# Mengubah hasil ramalan menjadi numerik
+ramalan_test.add <- as.numeric(ramalan.add)
+
+# Menghitung error testing
+error_test.add <- as.numeric(test.ts) -
+  ramalan_test.add
+
+# Menghitung SSE, MSE, dan MAPE
+SSE_test.add <- sum(error_test.add^2)
+
+MSE_test.add <- mean(error_test.add^2)
+
+MAPE_test.add <- mean(
+  abs(
+    error_test.add /
+      as.numeric(test.ts)
+  ) * 100
+)
+
+# Menampilkan hasil akurasi
+akurasi_test.add <- matrix(
+  c(
+    SSE_test.add,
+    MSE_test.add,
+    MAPE_test.add
+  )
+)
+
+row.names(akurasi_test.add) <- c(
+  "SSE",
+  "MSE",
+  "MAPE"
+)
+
+colnames(akurasi_test.add) <- c(
+  "Holt-Winters Aditif"
+)
+
+akurasi_test.add
+```
+
+Pada data testing, diperoleh **SSE sebesar $2,536727\times10^{13}$**, **MSE sebesar $6,187139\times10^{11}$**, dan **MAPE sebesar 81,23107%**.
+
+Nilai MAPE pada data testing jauh lebih besar dibandingkan dengan data training. Hal ini menunjukkan bahwa kesalahan peramalan meningkat ketika model Holt-Winters aditif digunakan untuk meramalkan data pada periode yang belum digunakan dalam pembentukan model.
+
+## 8.5 Holt-Winters Multiplikatif
+
+```{r}
+# Pemodelan Holt-Winters multiplikatif
+winter.mult <- HoltWinters(
+  train.ts,
+  seasonal = "multiplicative"
+)
+
+winter.mult
+
+
+# Menampilkan parameter optimal
+winter.mult$alpha
+winter.mult$beta
+winter.mult$gamma
+
+
+# Melihat hasil pemulusan
+winter.mult$fitted
+
+
+# Plot hasil pemulusan Holt-Winters multiplikatif
+plot(
+  winter.mult,
+  main = "Holt-Winters Multiplikatif",
+  xlab = "Tahun",
+  ylab = "Jumlah Wisman"
+)
+```
+
+Pada metode **Holt-Winters multiplikatif**, diperoleh parameter optimal yaitu $\alpha=0,8492963$, $\beta=0$, dan $\gamma=1$.
+
+Nilai $\alpha$ sebesar 0,8492963 menunjukkan bahwa pengamatan terbaru mendapatkan bobot yang cukup besar dalam menentukan level model. Nilai $\beta=0$ menunjukkan bahwa tidak terdapat pembaruan parameter tren melalui proses pemulusan, sedangkan $\gamma=1$ menunjukkan bahwa komponen musiman diperbarui dengan bobot yang besar.
+
+Model juga menghasilkan 12 faktor musiman yang berbeda untuk setiap bulan. Hal ini menunjukkan bahwa model mempertimbangkan perubahan pola musiman bulanan secara relatif terhadap level data.
+
+## 8.6 Peramalan Holt-Winters Multiplikatif
+
+```{r}
+# Melakukan peramalan untuk seluruh periode testing
+ramalan.mult <- predict(
+  winter.mult,
+  n.ahead = length(test.ts)
+)
+
+ramalan.mult
+
+
+# Plot peramalan Holt-Winters multiplikatif
+plot(
+  train.ts,
+  xlim = c(2008, 2025),
+  main = "Peramalan Holt-Winters Multiplikatif",
+  xlab = "Tahun",
+  ylab = "Jumlah Wisman"
+)
+
+lines(
+  fitted(winter.mult)[, "xhat"],
+  col = 2
+)
+
+lines(
+  ramalan.mult,
+  col = 4
+)
+
+legend(
+  "topleft",
+  legend = c("Aktual", "Fitted", "Ramalan"),
+  col = c(1, 2, 4),
+  lty = 1
+)
+```
+
+Berdasarkan hasil peramalan, Holt-Winters multiplikatif menghasilkan pola yang mengikuti komponen musiman dan menunjukkan kecenderungan meningkat dari waktu ke waktu.
+
+Pada periode testing, misalnya, hasil ramalan **Agustus 2021 sebesar 132.471,61**, kemudian meningkat menjadi **140.067,56 pada Agustus 2022**, **147.663,52 pada Agustus 2023**, dan **155.259,48 pada Agustus 2024**. Pola yang sama juga terlihat pada bulan-bulan lainnya.
+
+Dengan demikian, model multiplikatif menghasilkan ramalan yang meningkat secara bertahap dan tetap mempertahankan pola musiman bulanan.
+
+## 8.7 Akurasi Training Holt-Winters Multiplikatif
+
+```{r}
+# Mengambil nilai fitted
+fitted.mult <- fitted(winter.mult)[, "xhat"]
+
+# Menyesuaikan data aktual dengan panjang fitted
+actual_train.mult <- tail(
+  train.ts,
+  length(fitted.mult)
+)
+
+# Menghitung error
+error_train.mult <- actual_train.mult -
+  fitted.mult
+
+# Menghitung SSE, MSE, dan MAPE
+SSE_train.mult <- sum(error_train.mult^2)
+
+MSE_train.mult <- mean(error_train.mult^2)
+
+MAPE_train.mult <- mean(
+  abs(
+    error_train.mult /
+      actual_train.mult
+  ) * 100
+)
+
+# Menampilkan hasil akurasi
+akurasi_train.mult <- matrix(
+  c(
+    SSE_train.mult,
+    MSE_train.mult,
+    MAPE_train.mult
+  )
+)
+
+row.names(akurasi_train.mult) <- c(
+  "SSE",
+  "MSE",
+  "MAPE"
+)
+
+colnames(akurasi_train.mult) <- c(
+  "Holt-Winters Multiplikatif"
+)
+
+akurasi_train.mult
+```
+
+Berdasarkan hasil akurasi data training, diperoleh **SSE sebesar $1,045174\times10^{12}$**, **MSE sebesar $6,921679\times10^9$**, dan **MAPE sebesar 8,434563%**.
+
+Nilai MAPE tersebut menunjukkan bahwa rata-rata kesalahan persentase hasil pemulusan Holt-Winters multiplikatif terhadap data aktual pada data training adalah sekitar **8,43%**.
+
+## 8.8 Akurasi Testing Holt-Winters Multiplikatif
+
+```{r}
+# Mengubah hasil ramalan menjadi numerik
+ramalan_test.mult <- as.numeric(ramalan.mult)
+
+# Menghitung error testing
+error_test.mult <- as.numeric(test.ts) -
+  ramalan_test.mult
+
+# Menghitung SSE, MSE, dan MAPE
+SSE_test.mult <- sum(error_test.mult^2)
+
+MSE_test.mult <- mean(error_test.mult^2)
+
+MAPE_test.mult <- mean(
+  abs(
+    error_test.mult /
+      as.numeric(test.ts)
+  ) * 100
+)
+
+# Menampilkan hasil akurasi
+akurasi_test.mult <- matrix(
+  c(
+    SSE_test.mult,
+    MSE_test.mult,
+    MAPE_test.mult
+  )
+)
+
+row.names(akurasi_test.mult) <- c(
+  "SSE",
+  "MSE",
+  "MAPE"
+)
+
+colnames(akurasi_test.mult) <- c(
+  "Holt-Winters Multiplikatif"
+)
+
+akurasi_test.mult
+```
+
+Pada data testing, diperoleh **SSE sebesar $2,388324\times10^{13}$**, **MSE sebesar $5,825180\times10^{11}$**, dan **MAPE sebesar 71,12316%**.
+
+Nilai MAPE pada data testing lebih besar dibandingkan dengan data training. Hal ini menunjukkan bahwa kesalahan peramalan meningkat ketika model digunakan pada data yang belum digunakan dalam pembentukan model.
+
+## 8.9 Ringkasan Akurasi Holt-Winters
+
+```{r}
+akurasi_HW <- cbind(
+  akurasi_train.add,
+  akurasi_train.mult
+)
+
+akurasi_HW
+
+
+akurasi_HW_test <- cbind(
+  akurasi_test.add,
+  akurasi_test.mult
+)
+
+akurasi_HW_test
+```
+
+Berdasarkan ringkasan akurasi, pada data training Holt-Winters multiplikatif menghasilkan **MAPE sebesar 8,434563%**, sedangkan Holt-Winters aditif menghasilkan **MAPE sebesar 10,20307%**.
+
+Pada data testing, Holt-Winters multiplikatif menghasilkan **MAPE sebesar 71,12316%**, sedangkan Holt-Winters aditif menghasilkan **MAPE sebesar 81,23107%**. Nilai SSE dan MSE pada model multiplikatif juga lebih kecil dibandingkan model aditif pada data testing.
+
+---
+
+# 9. Perbandingan Metode
+
+## 9.1 Perbandingan Metode Data Training
+
+```{r}
+# Menggabungkan akurasi data training
+perbandingan_train <- cbind(
+  akurasi_train.sma,
+  akurasi_train.dma,
+  akurasi_train.des,
+  akurasi_train.add,
+  akurasi_train.mult
+)
+
+# Menambahkan hasil SES
+perbandingan_train <- cbind(
+  perbandingan_train,
+  akurasi_train.ses
+)
+
+# Mengubah nama kolom
+colnames(perbandingan_train) <- c(
+  "SMA",
+  "DMA",
+  "DES",
+  "HW Aditif",
+  "HW Multiplikatif",
+  "SES"
+)
+
+# Menampilkan akurasi training
+perbandingan_train
+```
+
+```{r}
+# Perbandingan MAPE data training
+MAPE_train <- perbandingan_train["MAPE", ]
+
+MAPE_train
+```
+
+## 9.2 Perbandingan Metode Data Testing
+
+```{r}
+# Menggabungkan akurasi data testing
+perbandingan_test <- cbind(
+  akurasi_test.sma,
+  akurasi_test.dma,
+  akurasi_test.des,
+  akurasi_test.add,
+  akurasi_test.mult
+)
+
+# Menambahkan hasil SES
+perbandingan_test <- cbind(
+  perbandingan_test,
+  akurasi_test.ses
+)
+
+# Mengubah nama kolom
+colnames(perbandingan_test) <- c(
+  "SMA",
+  "DMA",
+  "DES",
+  "HW Aditif",
+  "HW Multiplikatif",
+  "SES"
+)
+
+# Menampilkan akurasi testing
+perbandingan_test
+```
+
+```{r}
+# Perbandingan MAPE data testing
+MAPE_test <- perbandingan_test["MAPE", ]
+
+MAPE_test
+```
+
+## 9.3 Perbandingan Nilai MAPE Data Training dan Data Testing
+
+```{r}
+# Tabel perbandingan MAPE
+perbandingan_MAPE <- rbind(
+  Training = MAPE_train,
+  Testing = MAPE_test
+)
+
+perbandingan_MAPE
+```
+
+**Interpretasi:**
+
+Pada **data training**, nilai MAPE yang diperoleh adalah **15,08716% untuk SMA**, **17,31724% untuk DMA**, **10,25430% untuk DES**, **10,20307% untuk Holt-Winters Aditif**, **8,43456% untuk Holt-Winters Multiplikatif**, dan **9,73932% untuk SES**. Nilai MAPE tersebut menunjukkan bahwa tingkat kesalahan masing-masing metode pada data training berada pada nilai yang berbeda.
+
+Pada **data testing**, diperoleh nilai MAPE sebesar **70,38539% untuk SMA**, **69,43804% untuk DMA**, **118,27831% untuk DES**, **81,23107% untuk Holt-Winters Aditif**, **71,12316% untuk Holt-Winters Multiplikatif**, dan **70,30509% untuk SES**. Terlihat bahwa nilai MAPE pada data testing lebih besar dibandingkan dengan data training pada seluruh metode.
+
+Perbedaan nilai MAPE antara data training dan testing menunjukkan bahwa kesalahan peramalan meningkat ketika model digunakan untuk meramalkan data yang belum digunakan dalam pembentukan model. Peningkatan tersebut cukup besar terutama pada metode DES dan Holt-Winters Aditif, sedangkan metode lainnya juga mengalami peningkatan kesalahan pada data testing.
+
+Berdasarkan hasil perbandingan tersebut, dapat dilihat bahwa setiap metode memberikan tingkat kesalahan yang berbeda pada data training dan testing. Oleh karena itu, hasil SSE, MSE, dan MAPE pada bagian ini dapat digunakan sebagai dasar untuk pembahasan lebih lanjut mengenai hasil keseluruhan metode peramalan.
+
+---
+
+# 10. Kesimpulan
+
+Berdasarkan hasil analisis data jumlah wisatawan mancanegara Indonesia periode **Januari 2008 sampai Desember 2024**, diperoleh sebanyak **204 observasi**. Data kemudian dibagi menjadi data training sebanyak **163 observasi** pada periode Januari 2008 sampai Juli 2021 dan data testing sebanyak **41 observasi** pada periode Agustus 2021 sampai Desember 2024.
+
+Peramalan dilakukan menggunakan enam metode, yaitu **Single Moving Average (SMA), Double Moving Average (DMA), Single Exponential Smoothing (SES), Double Exponential Smoothing (DES), Holt-Winters Aditif, dan Holt-Winters Multiplikatif**. Berdasarkan hasil pengukuran akurasi menggunakan SSE, MSE, dan MAPE, setiap metode menghasilkan tingkat kesalahan yang berbeda pada data training maupun data testing.
+
+Pada data training, nilai MAPE yang diperoleh adalah **15,08716% untuk SMA**, **17,31724% untuk DMA**, **10,25430% untuk DES**, **10,20307% untuk Holt-Winters Aditif**, **8,43456% untuk Holt-Winters Multiplikatif**, dan **9,73932% untuk SES**. Sementara itu, pada data testing diperoleh MAPE sebesar **70,38539% untuk SMA**, **69,43804% untuk DMA**, **118,27831% untuk DES**, **81,23107% untuk Holt-Winters Aditif**, **71,12316% untuk Holt-Winters Multiplikatif**, dan **70,30509% untuk SES**.
+
+Dari hasil tersebut terlihat bahwa seluruh metode menghasilkan nilai MAPE yang lebih besar pada data testing dibandingkan data training. Hal ini menunjukkan bahwa kesalahan peramalan meningkat ketika metode digunakan untuk meramalkan data yang belum digunakan dalam pembentukan model.
+
+Selain itu, hasil peramalan menunjukkan bahwa karakteristik masing-masing metode memengaruhi bentuk ramalan yang dihasilkan. SMA dan DMA menghasilkan pemulusan yang lebih halus, SES menghasilkan ramalan yang relatif stabil, sedangkan DES menghasilkan pola penurunan yang cukup tajam pada periode testing. Holt-Winters dapat mempertimbangkan pola musiman bulanan, baik dengan pendekatan aditif maupun multiplikatif.
+
+Secara keseluruhan, penerapan beberapa metode peramalan pada data jumlah wisatawan mancanegara menunjukkan adanya perbedaan hasil dan tingkat kesalahan antara data training dan testing. Oleh karena itu, hasil akurasi dari masing-masing metode dapat digunakan sebagai bahan pertimbangan dalam memilih metode peramalan yang sesuai dengan karakteristik data yang digunakan.
